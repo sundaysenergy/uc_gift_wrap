@@ -31,33 +31,22 @@ function uc_gift_wrap_menu() {
   return $items;
 }
 
-function uc_gift_wrap_settings_form_submit($form, $form_values) {
-  variable_set('uc_gift_wrap_per_item', $form_state['per_item']);
-  variable_set('uc_gift_wrap_charge', $form_state['charge']);
-}
-
 
 function uc_gift_wrap_settings_form() {
   $per_item = variable_get('uc_gift_wrap_per_item', 1);
   $charge = variable_get('uc_gift_wrap_charge', 3.00);
-  $form['per_item'] = array(
+  $form['uc_gift_wrap_per_item'] = array(
     '#type' => 'checkbox',
     '#title' => t('Charge per item rather than per order'),
     '#default_value' => $per_item,
-    '#weight' => '1'
   );
-  $form['charge'] = array(
+  $form['uc_gift_wrap_charge'] = array(
     '#type' => 'textfield',
     '#title' => t('Price per gift wrap'),
     '#default_value' => $charge,
-    '#weight' => '2'
   );
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Submit'),
-    '#weight' => '3'
-  );
-  return $form;
+
+  return system_settings_form($form);
 }
 
 /**
@@ -240,7 +229,7 @@ function _get_gift_wrap_for_product($nid) {
  *
  * Add a form element for the gift wrap checkbox
  */
-function uc_gift_wrap_form_alter($form_id, &$form) {
+function uc_gift_wrap_form_alter(&$form, $form_state, $form_id) {
   $node = $form['#node'];
   $product_types = module_invoke_all('product_types');
   if ((is_object($node) && $form_id == $node->type .'_node_form') && in_array($node->type, $product_types)) {

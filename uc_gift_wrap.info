@@ -4,6 +4,7 @@
 name = "UC Gift Wrap"
 description = "Gift wrap option during checkout."
 dependencies[] = uc_store
+package = Ubercart - extra
 core = 6.x
 version = "6.x-1.x-dev"
 project = "uc_gift_wrap"
