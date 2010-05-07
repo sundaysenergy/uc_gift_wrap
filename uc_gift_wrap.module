@@ -9,6 +9,9 @@
  * check out time.
  */
 
+define('_GIFTWRAP_UC_LINE_ITEM_TAG','gift_wrap');
+
+
 function uc_gift_wrap_perm() {
   return array('manage gift wrap options');
 }
@@ -88,6 +91,32 @@ function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
           '#default_value' => $arg1->gift_wrap['text'],
         );
 
+	    // ensure order payment totals get updated when option is toggled
+	    if (1 != $per_item) {
+		    drupal_add_js('
+		    
+		    	function updateOrderTotalWithGiftWrapRate() {
+		    		if ($("#edit-panes-up-uc-gift-wrap-gwcheck").is(":checked")) {
+			    		if (window.set_line_item)
+			    			set_line_item("'._GIFTWRAP_UC_LINE_ITEM_TAG.'","Gift wrapping",'.$charge.',1,1,true);
+		    		} else {
+			    		if (window.remove_line_item)
+			    			remove_line_item("'._GIFTWRAP_UC_LINE_ITEM_TAG.'");
+	  				}
+	    		}
+		    
+	    		$(document).ready(function(){
+
+					updateOrderTotalWithGiftWrapRate();
+	    		
+					$("#edit-panes-up-uc-gift-wrap-gwcheck").click(function(){
+						updateOrderTotalWithGiftWrapRate();
+	    			});
+	    		});
+	    		
+	    	', 'inline');
+	    }
+        
         return array('description' => $description, 'contents' => $contents);
 
     case 'review':
@@ -129,7 +158,7 @@ function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
 }
 
 function _uc_gift_wrap_save($order_id, $total_charge, $gift_text = '') {
-  uc_order_line_item_add($order_id, 'gift_wrap', t('Gift wrapping'), $total_charge, 1);
+  uc_order_line_item_add($order_id, _GIFTWRAP_UC_LINE_ITEM_TAG, t('Gift wrapping'), $total_charge, 1);
   db_query("INSERT INTO {uc_gift_wrap} (order_id, gift_text) values(%d, '%s')", $order_id, $gift_text);
 }
 
@@ -139,7 +168,7 @@ function _uc_gift_wrap_load($order_id) {
 }
 
 function _uc_gift_wrap_delete($order_id) {
-  db_query("DELETE FROM {uc_order_line_items} WHERE order_id = %d AND type = 'gift_wrap'", $order_id);
+  db_query("DELETE FROM {uc_order_line_items} WHERE order_id = %d AND type = '"._GIFTWRAP_UC_LINE_ITEM_TAG."'", $order_id);
   db_query("DELETE FROM {uc_gift_wrap} WHERE order_id = %d", $order_id);
 }
 
@@ -155,7 +184,7 @@ function _uc_gift_wrap_delete($order_id) {
  */
 function uc_gift_wrap_line_item() {
   $items[] = array(
-    'id' => 'gift_wrap',
+    'id' => _GIFTWRAP_UC_LINE_ITEM_TAG,
     'title' => t('Gift wrapping'),
     'weight' => 6,
     'stored' => TRUE,
@@ -204,7 +233,15 @@ function uc_gift_wrap_order($op, &$arg1) {
       }
       break;
 
-    //case 'total':
+    case 'total':
+    	// to show total to user in checkout view (see uc_order_get_total())
+    	foreach ($arg1->line_items as $line_item) {
+    		if (_GIFTWRAP_UC_LINE_ITEM_TAG == $line_item['type'])
+    			return $line_item['amount'];
+    	}
+    	return 0;
+    	break;
+    	
     case 'delete':
       //clean up
       _uc_gift_wrap_delete($arg1->order_id);
@@ -226,14 +263,13 @@ function _get_gift_wrap_for_product($nid) {
 
 /**
  * Implementation of hook_form_alter().
- *
- * Add a form element for the gift wrap checkbox
  */
 function uc_gift_wrap_form_alter(&$form, $form_state, $form_id) {
+  // Add a form element for the gift wrap checkbox
   $node = $form['#node'];
   $product_types = module_invoke_all('product_types');
   if ((is_object($node) && $form_id == $node->type .'_node_form') && in_array($node->type, $product_types)) {
-    $form['gift_wrap'] = array('#type' => 'checkbox',
+    $form[_GIFTWRAP_UC_LINE_ITEM_TAG] = array('#type' => 'checkbox',
           '#title' => 'Gift wrap',
           '#default_value' => $node->nid ? $node->gift_wrap : 1,
           '#description' => t('Gift wrap available'),
@@ -256,9 +292,8 @@ function uc_gift_wrap_nodeapi(&$node, $op) {
                 $node->nid, $node->gift_wrap);   
         break;
       case 'load':
-        $return = array('gift_wrap' => array());
-        //print(_get_gift_wrap_for_product($node->nid));
-        $return['gift_wrap'] = _get_gift_wrap_for_product($node->nid);
+        $return = array(_GIFTWRAP_UC_LINE_ITEM_TAG => array());
+        $return[_GIFTWRAP_UC_LINE_ITEM_TAG] = _get_gift_wrap_for_product($node->nid);
         return $return;
       break;
       case 'delete':
