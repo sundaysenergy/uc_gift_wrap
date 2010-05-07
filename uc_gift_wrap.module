@@ -233,15 +233,6 @@ function uc_gift_wrap_order($op, &$arg1) {
       }
       break;
 
-    case 'total':
-    	// to show total to user in checkout view (see uc_order_get_total())
-    	foreach ($arg1->line_items as $line_item) {
-    		if (_GIFTWRAP_UC_LINE_ITEM_TAG == $line_item['type'])
-    			return $line_item['amount'];
-    	}
-    	return 0;
-    	break;
-    	
     case 'delete':
       //clean up
       _uc_gift_wrap_delete($arg1->order_id);
