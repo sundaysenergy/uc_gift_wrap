@@ -10,6 +10,9 @@
  */
 
 define('_GIFTWRAP_UC_LINE_ITEM_TAG','gift_wrap');
+define('_UCGW_VAR_PER_ITEM','uc_gift_wrap_per_item');
+define('_UCGW_VAR_DEFAULT_ON','uc_gift_wrap_default_on');
+define('_UCGW_VAR_CHARGE','uc_gift_wrap_charge');
 
 
 function uc_gift_wrap_perm() {
@@ -36,14 +39,21 @@ function uc_gift_wrap_menu() {
 
 
 function uc_gift_wrap_settings_form() {
-  $per_item = variable_get('uc_gift_wrap_per_item', 1);
-  $charge = variable_get('uc_gift_wrap_charge', 3.00);
-  $form['uc_gift_wrap_per_item'] = array(
+  $per_item = variable_get(_UCGW_VAR_PER_ITEM, 1);
+  $charge = variable_get(_UCGW_VAR_CHARGE, 3.00);
+  $default_on = variable_get(_UCGW_VAR_DEFAULT_ON, 0);
+  
+  $form[_UCGW_VAR_PER_ITEM] = array(
     '#type' => 'checkbox',
     '#title' => t('Charge per item rather than per order'),
     '#default_value' => $per_item,
   );
-  $form['uc_gift_wrap_charge'] = array(
+  $form[_UCGW_VAR_DEFAULT_ON] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Turn gift wrapping on by default (per order only)'),
+    '#default_value' => $default_on,
+  );
+  $form[_UCGW_VAR_CHARGE] = array(
     '#type' => 'textfield',
     '#title' => t('Price per gift wrap'),
     '#default_value' => $charge,
@@ -71,9 +81,11 @@ function uc_gift_wrap_checkout_pane() {
 function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
   switch ($op) {
     case 'view':
-        $per_item = variable_get('uc_gift_wrap_per_item', 1);
-        $charge = variable_get('uc_gift_wrap_charge', 3.00);
+        $per_item = variable_get(_UCGW_VAR_PER_ITEM, 1);
+        $charge = variable_get(_UCGW_VAR_CHARGE, 3.00);
+        $default_on = variable_get(_UCGW_VAR_DEFAULT_ON, 0);
         $currency_sign = variable_get('uc_currency_sign', '$');
+        
         $description = t('');
         $contents['gwcheck'] = array(
           '#type' => 'checkbox',
@@ -93,10 +105,17 @@ function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
 
 	    // ensure order payment totals get updated when option is toggled
 	    if (1 != $per_item) {
-		    drupal_add_js('
+
+        	// gift wrapping on by default?
+        	if (1 == $default_on)
+        		$default_on_script =  '$("input[id*=uc-gift-wrap-gwcheck]").attr("checked","checked");';
+        	else
+        		$default_on_script = '';
+	    	
+	    	drupal_add_js('
 		    
 		    	function updateOrderTotalWithGiftWrapRate() {
-		    		if ($("#edit-panes-up-uc-gift-wrap-gwcheck").is(":checked")) {
+		    		if ($("input[id*=uc-gift-wrap-gwcheck]").is(":checked")) {
 			    		if (window.set_line_item)
 			    			set_line_item("'._GIFTWRAP_UC_LINE_ITEM_TAG.'","Gift wrapping",'.$charge.',1,1,true);
 		    		} else {
@@ -106,10 +125,10 @@ function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
 	    		}
 		    
 	    		$(document).ready(function(){
-
+					'.$default_on_script.'
 					updateOrderTotalWithGiftWrapRate();
 	    		
-					$("#edit-panes-up-uc-gift-wrap-gwcheck").click(function(){
+					$("input[id*=uc-gift-wrap-gwcheck]").click(function(){
 						updateOrderTotalWithGiftWrapRate();
 	    			});
 	    		});
@@ -206,8 +225,8 @@ function uc_gift_wrap_order($op, &$arg1) {
     case 'save':
       _uc_gift_wrap_delete($arg1->order_id);
       if ($arg1->gift_wrap['chk']) {
-        $per_item = variable_get('uc_gift_wrap_per_item', 1);
-        $charge = variable_get('uc_gift_wrap_charge', 3.00);
+        $per_item = variable_get(_UCGW_VAR_PER_ITEM, 1);
+        $charge = variable_get(_UCGW_VAR_CHARGE, 3.00);
         if ($per_item) {
           //charge per item - count number of items in order
           foreach ($arg1->products as $product) {
