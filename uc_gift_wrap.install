@@ -6,6 +6,8 @@
  * Install Ubercart Gift Wrap option at checkout
  */
 
+require_once('uc_gift_wrap.constants.inc');
+
 
 /**
  * Install the initial schema.
@@ -39,4 +41,7 @@ function uc_gift_wrap_install() {
 function uc_gift_wrap_uninstall() {
   db_query('DROP TABLE {uc_gift_wrap}');
   db_query('DROP TABLE {uc_gift_wrap_node}');
+  variable_del(_UCGW_VAR_PER_ITEM);
+  variable_del(_UCGW_VAR_DEFAULT_ON);
+  variable_del(_UCGW_VAR_CHARGE);
 }
