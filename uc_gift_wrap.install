@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 /**
  * @file
@@ -27,7 +26,7 @@ function uc_gift_wrap_install() {
                   PRIMARY KEY  (nid)
         ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
 
-                
+
       break;
     case 'pgsql':
       // To be implemented....
