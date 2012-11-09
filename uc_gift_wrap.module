@@ -1,9 +1,8 @@
 <?php
-// $Id$
 
 /**
  * @file
- * Ubercart Gift Wrap 
+ * Ubercart Gift Wrap
  *
  * Provides a way to specify and charge for gift wrapping at
  * check out time.
