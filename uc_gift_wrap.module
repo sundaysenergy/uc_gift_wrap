@@ -8,9 +8,6 @@
  * check out time.
  */
 
-require_once('uc_gift_wrap.constants.inc');
-
-
 function uc_gift_wrap_perm() {
   return array('manage gift wrap options');
 }
@@ -33,28 +30,19 @@ function uc_gift_wrap_menu() {
   return $items;
 }
 
-
 function uc_gift_wrap_settings_form() {
-  $per_item = variable_get(_UCGW_VAR_PER_ITEM, 1);
-  $charge = variable_get(_UCGW_VAR_CHARGE, 3.00);
-  $default_on = variable_get(_UCGW_VAR_DEFAULT_ON, 0);
-  
-  $form[_UCGW_VAR_PER_ITEM] = array(
+  $per_item = variable_get('uc_gift_wrap_per_item', 1);
+  $charge = variable_get('uc_gift_wrap_charge', 3.00);
+  $form['uc_gift_wrap_per_item'] = array(
     '#type' => 'checkbox',
     '#title' => t('Charge per item rather than per order'),
     '#default_value' => $per_item,
   );
-  $form[_UCGW_VAR_DEFAULT_ON] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Turn gift wrapping on by default'),
-    '#default_value' => $default_on,
-  );
-  $form[_UCGW_VAR_CHARGE] = array(
+  $form['uc_gift_wrap_charge'] = array(
     '#type' => 'textfield',
     '#title' => t('Price per gift wrap'),
     '#default_value' => $charge,
   );
-
   return system_settings_form($form);
 }
 
@@ -77,16 +65,9 @@ function uc_gift_wrap_checkout_pane() {
 function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
   switch ($op) {
     case 'view':
-      // if atleast one product has gift wrap available
-      $products = uc_cart_get_contents();
-      $result = _uc_gift_wrap_find_out_which_products_have_gift_wrap($products);
-      if ($result['any']) {
-      
-        $per_item = variable_get(_UCGW_VAR_PER_ITEM, 1);
-        $charge = variable_get(_UCGW_VAR_CHARGE, 3.00);
-        $default_on = variable_get(_UCGW_VAR_DEFAULT_ON, 0);
+        $per_item = variable_get('uc_gift_wrap_per_item', 1);
+        $charge = variable_get('uc_gift_wrap_charge', 3.00);
         $currency_sign = variable_get('uc_currency_sign', '$');
-        
         $description = t('');
         $contents['gwcheck'] = array(
           '#type' => 'checkbox',
@@ -104,63 +85,37 @@ function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
           '#default_value' => $arg1->gift_wrap['text'],
         );
 
-      	// gift wrapping on by default?
-      	if (1 == $default_on)
-      		$default_on_script =  '$("input[id*=uc-gift-wrap-gwcheck]").attr("checked","checked");';
-      	else
-      		$default_on_script = '';
-
-      	// update checkout total using JS
-        $total_gift_wrap_charge = $per_item ? $charge * count($result['products']) : $charge;
-    	drupal_add_js('
-	    
-	    	function updateOrderTotalWithGiftWrapRate() {
-	    		if ($("input[id*=uc-gift-wrap-gwcheck]").is(":checked")) {
-	    		    $("textarea#edit-panes-up-uc-gift-wrap-gwtext").removeAttr("disabled");
-		    		if (window.set_line_item)
-		    			set_line_item("'._GIFTWRAP_UC_LINE_ITEM_TAG.'","Gift wrapping",'.$total_gift_wrap_charge.',1,1,true);
-	    		} else {
-                    $("textarea#edit-panes-up-uc-gift-wrap-gwtext").attr("disabled","disabled");
-		    		if (window.remove_line_item)
-		    			remove_line_item("'._GIFTWRAP_UC_LINE_ITEM_TAG.'");
-  				}
-    		}
-	    
-    		$(document).ready(function(){
-				'.$default_on_script.'
-				updateOrderTotalWithGiftWrapRate();
-    		
-				$("input[id*=uc-gift-wrap-gwcheck]").click(function(){
-					updateOrderTotalWithGiftWrapRate();
-    			});
-    		});
-    		
-    	', 'inline');
-        
         return array('description' => $description, 'contents' => $contents);
-      }
-      // no products have gift wrap available
-      return array();
-      
+
     case 'review':
+
       if ($arg1->gift_wrap['chk']) {
       //check if at least one product has gift wrap available and print which ones have available if not all
-      $result = _uc_gift_wrap_find_out_which_products_have_gift_wrap($arg1->products);
+      $all_gift_wrappable = TRUE;
+      $any_gift_wrappable = FALSE;
+      $product_names = '';
+      foreach ($arg1->products as $product) {
+        if (_get_gift_wrap_for_product($product->nid)) {
+          $any_gift_wrappable = TRUE;
+          $product_names .= '<br/>- ' . $product->title;
+        }
+        else {
+          $all_gift_wrappable = FALSE;
+        }
+      }
 
-      if (!$result['any']) {
+      if (!$any_gift_wrappable) {
         $msg = t('Note that gift wrapping is not available for this order (you will not be charged)');
       }
-      else if (!$result['all']) {
-        $msg = t('Note that gift wrapping is only available for: ') . '<br/>-' . implode('<br/>- ',$result['products']);
+      else if (!$all_gift_wrappable) {
+        $msg = t('Note that gift wrapping is only available for: ') . $product_names;
       }
       else {
         return;
+        }
       }
-      drupal_add_css(drupal_get_path('module', 'uc_gift_wrap') .'/uc_gift_wrap.css');
-      return '<div class="gift-wrp-msg">' . $msg . '</div>';
-    }
-    
-    return;
+      return;
+
   case 'process':
 
         $arg1->gift_wrap['chk'] = $arg2['gwcheck'];
@@ -170,7 +125,7 @@ function uc_checkout_pane_uc_gift_wrap($op, &$arg1, $arg2) {
 }
 
 function _uc_gift_wrap_save($order_id, $total_charge, $gift_text = '') {
-  uc_order_line_item_add($order_id, _GIFTWRAP_UC_LINE_ITEM_TAG, t('Gift wrapping'), $total_charge, 1);
+  uc_order_line_item_add($order_id, 'gift_wrap', t('Gift wrapping'), $total_charge, 1);
   db_query("INSERT INTO {uc_gift_wrap} (order_id, gift_text) values(%d, '%s')", $order_id, $gift_text);
 }
 
@@ -180,47 +135,23 @@ function _uc_gift_wrap_load($order_id) {
 }
 
 function _uc_gift_wrap_delete($order_id) {
-  db_query("DELETE FROM {uc_order_line_items} WHERE order_id = %d AND type = '"._GIFTWRAP_UC_LINE_ITEM_TAG."'", $order_id);
+  db_query("DELETE FROM {uc_order_line_items} WHERE order_id = %d AND type = 'gift_wrap'", $order_id);
   db_query("DELETE FROM {uc_gift_wrap} WHERE order_id = %d", $order_id);
 }
 
-/**
- * Find out which products have gift wrap available.
- * 
- * @param $products products in checkout.
- * @return array(
- *      'all' => TRUE if gift wrap available for all products, 
- *      'any' => TRUE if gift wrap available for any products,
- *      'products' => array(Names of products for which gift wrap is available)
- * )
- */
-function _uc_gift_wrap_find_out_which_products_have_gift_wrap($products) {
-    $all_gift_wrappable = TRUE;
-    $any_gift_wrappable = FALSE;
-    $available = array();
-    foreach ($products as $product) {
-      if (_get_gift_wrap_for_product($product->nid)) {
-        $any_gift_wrappable = TRUE;
-        $available[] = $product->title;
-      }
-      else {
-        $all_gift_wrappable = FALSE;
-      }
-    }
-    return array('all' => $all_gift_wrappable, 'any' => $any_gift_wrappable, 'products' => $available);
-}
+
 
 /**
  *  Hook Order Funtions
  *  Called from uc_points_payment.inc hook_order
  */
- 
+
 /**
  * Implementation of hook_line_item().
  */
 function uc_gift_wrap_line_item() {
   $items[] = array(
-    'id' => _GIFTWRAP_UC_LINE_ITEM_TAG,
+    'id' => 'gift_wrap',
     'title' => t('Gift wrapping'),
     'weight' => 6,
     'stored' => TRUE,
@@ -237,22 +168,32 @@ function uc_gift_wrap_line_item() {
  * Implementation of hook_order().
  */
 function uc_gift_wrap_order($op, &$arg1) {
-  
+
   switch ($op) {
     case 'save':
       _uc_gift_wrap_delete($arg1->order_id);
       if ($arg1->gift_wrap['chk']) {
-        $per_item = variable_get(_UCGW_VAR_PER_ITEM, 1);
-        $charge = variable_get(_UCGW_VAR_CHARGE, 3.00);
+        $per_item = variable_get('uc_gift_wrap_per_item', 1);
+        $charge = variable_get('uc_gift_wrap_charge', 3.00);
         if ($per_item) {
           //charge per item - count number of items in order
+          //mightynest HACK, only charge for products that can be gift wrapped
           foreach ($arg1->products as $product) {
-            $total_charge += $product->qty * $charge;
+            if (_get_gift_wrap_for_product($product->nid)) {
+              $total_charge += $product->qty * $charge;
+            }
           }
-        } 
+        }
         else {
-          $total_charge = $charge;
-        }   
+          foreach ($arg1->products as $product) {
+            if (_get_gift_wrap_for_product($product->nid)) {
+              $total_charge = $charge;
+            }
+            else {
+              $total_charge = 0;
+            }
+          }
+        }
         _uc_gift_wrap_save($arg1->order_id, $total_charge, $arg1->gift_wrap['text']);
       }
       break;
@@ -269,17 +210,18 @@ function uc_gift_wrap_order($op, &$arg1) {
       }
       break;
 
+    //case 'total':
     case 'delete':
       //clean up
       _uc_gift_wrap_delete($arg1->order_id);
       break;
   }
-} 
+}
 
 function _get_gift_wrap_for_product($nid) {
-  $sql = "SELECT gift_wrap_available FROM {uc_gift_wrap_node} WHERE nid = %d";  
+  $sql = "SELECT gift_wrap_available FROM {uc_gift_wrap_node} WHERE nid = %d";
   $results = db_query($sql, $nid);
-  if ($gift_wrap_available = db_fetch_object($results)) {  
+  if ($gift_wrap_available = db_fetch_object($results)) {
     return $gift_wrap_available->gift_wrap_available;
   }
   else { //defaults to 1
@@ -290,13 +232,14 @@ function _get_gift_wrap_for_product($nid) {
 
 /**
  * Implementation of hook_form_alter().
+ *
+ * Add a form element for the gift wrap checkbox
  */
 function uc_gift_wrap_form_alter(&$form, $form_state, $form_id) {
-  // Add a form element for the gift wrap checkbox
   $node = $form['#node'];
   $product_types = module_invoke_all('product_types');
-  if ((is_object($node) && $node->type . '_node_form' == $form_id) && in_array($node->type, $product_types)) {
-    $form[_GIFTWRAP_UC_LINE_ITEM_TAG] = array('#type' => 'checkbox',
+  if ((is_object($node) && $form_id == $node->type .'_node_form') && in_array($node->type, $product_types)) {
+    $form['gift_wrap'] = array('#type' => 'checkbox',
           '#title' => 'Gift wrap',
           '#default_value' => $node->nid ? $node->gift_wrap : 1,
           '#description' => t('Gift wrap available'),
@@ -316,11 +259,12 @@ function uc_gift_wrap_nodeapi(&$node, $op) {
       case 'update':
         db_query("DELETE FROM {uc_gift_wrap_node} WHERE nid = %d", $node->nid);
         db_query("INSERT INTO {uc_gift_wrap_node} (nid, gift_wrap_available) VALUES (%d, %d)",
-                $node->nid, $node->gift_wrap);   
+                $node->nid, $node->gift_wrap);
         break;
       case 'load':
-        $return = array(_GIFTWRAP_UC_LINE_ITEM_TAG => array());
-        $return[_GIFTWRAP_UC_LINE_ITEM_TAG] = _get_gift_wrap_for_product($node->nid);
+        $return = array('gift_wrap' => array());
+        //print(_get_gift_wrap_for_product($node->nid));
+        $return['gift_wrap'] = _get_gift_wrap_for_product($node->nid);
         return $return;
       break;
       case 'delete':
